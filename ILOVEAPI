@@ -1,0 +1,139 @@
+# 🔐 إعداد iLovePDF API Credentials في n8n
+> دليل كامل خطوة بخطوة لإعداد وربط iLovePDF API لاستخدامه في مهام التحويل (HTML → PDF أو أي صيغة أخرى).
+
+---
+
+## 🧩 1. إنشاء حساب iLovePDF Developer
+1. توجّه إلى الموقع الرسمي للمطورين:  
+   🔗 [https://developer.ilovepdf.com](https://developer.ilovepdf.com)
+2. سجّل الدخول أو أنشئ حسابًا جديدًا (Email + Password).
+3. بعد تسجيل الدخول، افتح من القائمة الجانبية:
+   **→ Projects → Create New Project**
+4. اختر اسمًا للمشروع مثل:
+   ```
+   Executive_Report_Automation
+   ```
+5. بعد الإنشاء مباشرة سيُظهر لك:
+   - **Project Key**
+   - **Secret Key**
+   (⚠️ احفظهما في مكان آمن — سنستخدمهما في n8n).
+
+---
+
+## ⚙️ 2. إنشاء Credential جديدة في n8n
+
+1. في n8n، افتح القائمة الجانبية واختر:
+   **Credentials → New Credential**
+2. اختر نوع الاتصال:
+   ```
+   HTTP Request
+   ```
+3. قم بتعبئة المعلومات التالية:
+
+   | الإعداد | القيمة |
+   |----------|----------|
+   | **Name** | iLovePDF API |
+   | **Authentication** | None (يتم الإرسال يدويًا) |
+   | **Base URL** | https://api.ilovepdf.com/v1 |
+
+4. **احفظ الإعدادات.**
+
+---
+
+## 🔑 3. الحصول على Token مؤقت عبر الـ API
+
+الـ iLovePDF API لا يستخدم الـ Key مباشرة في الطلبات،  
+بل يجب أولاً إنشاء **Token مؤقت (JWT)** عبر هذا الـ Endpoint:
+
+**عقدة جديدة في n8n:**
+- النوع: `HTTP Request`
+- الاسم: `Get Token`
+- **Method:** `POST`
+- **URL:**  
+  ```
+  https://api.ilovepdf.com/v1/auth
+  ```
+
+**Body Parameters:**
+| Name | Value |
+|-------|-------|
+| `public_key` | (ضع هنا الـ Project Key الخاص بك) |
+| `secret_key` | (ضع هنا الـ Secret Key الخاص بك) |
+
+**Response المتوقع:**
+```json
+{
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+احفظ هذا **token** لأنه سيُستخدم في جميع الطلبات اللاحقة عبر:
+```
+Authorization: Bearer {{$json["token"]}}
+```
+
+---
+
+## 🔁 4. استخدام الـ Token في العمليات التالية
+
+بعد الحصول على الـ Token، يمكنك تنفيذ أي مهمة من مهام iLovePDF بالترتيب التالي:
+
+### 1️⃣ إنشاء مهمة جديدة (Create Task)
+```http
+POST https://api.ilovepdf.com/v1/start/htmlpdf
+Authorization: Bearer <token>
+```
+
+### 2️⃣ رفع الملف (Upload)
+```http
+POST https://<server>/v1/upload
+Authorization: Bearer <token>
+FormData:
+  task = <task_id>
+  file = <file_content or HTML>
+```
+
+### 3️⃣ معالجة التحويل (Process)
+```http
+POST https://<server>/v1/process
+Authorization: Bearer <token>
+FormData:
+  task = <task_id>
+  tool = htmlpdf
+  output_filename = Executive_Report.pdf
+```
+
+### 4️⃣ تنزيل الملف النهائي (Download)
+```http
+GET https://<server>/v1/download/<task_id>
+Authorization: Bearer <token>
+```
+
+---
+
+## 🧠 ملاحظات مهمة
+- صلاحية الـ Token قصيرة (عادةً 1 ساعة)، يجب توليده من جديد عند كل تنفيذ.
+- يمكنك استخدام نفس المشروع في أكثر من سير عمل داخل n8n.
+- إذا حصلت على خطأ:
+  ```
+  Authorization failed - please check your credentials
+  ```
+  تأكد أن **الـ Secret Key و الـ Project Key** صحيحة 100%.
+
+---
+
+## ✅ مثال تسلسل عقد iLovePDF داخل n8n
+
+```
+[Get Token]
+   ↓
+[Create Task (start/htmlpdf)]
+   ↓
+[Upload HTML]
+   ↓
+[Process Task (html → pdf)]
+   ↓
+[Download PDF]
+```
+
+---
